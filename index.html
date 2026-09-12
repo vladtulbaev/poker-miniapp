@@ -6,18 +6,69 @@
   <meta name="theme-color" content="#000000" />
   <meta name="color-scheme" content="dark" />
   <title>Покер</title>
-  <link rel="icon" href="assets/jane.png" />
-  <link rel="apple-touch-icon" href="assets/jane.png" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="assets/m5.png" />
+  <link rel="apple-touch-icon" href="assets/m5.png" />
+  <link rel="stylesheet" href="style.css?v=2" />
   <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head>
 <body>
-  <div id="app">
-    <header id="topbar">
-      <button class="icon-btn" id="btn-back" aria-label="Back">
+  <!-- ГЛАВНАЯ -->
+  <section class="screen" id="screen-home" hidden>
+    <div class="home-top">
+      <button class="me-chip" id="home-avatar-btn" aria-label="Сменить аватар">
+        <img id="home-avatar" src="assets/m5.png" alt="" />
+        <span id="home-name">…</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </button>
+    </div>
+    <div class="home-hero">
+      <div class="hero-cards">
+        <div class="card red"><div class="rank">A</div><div class="suit"><svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div></div>
+        <div class="card"><div class="rank">A</div><div class="suit"><svg viewBox="0 0 24 24"><path d="M12 2C12 2 4 8.6 4 13.4a4.1 4.1 0 0 0 6.9 3c-.3 1.8-1.3 3.4-2.9 4.6h8c-1.6-1.2-2.6-2.8-2.9-4.6a4.1 4.1 0 0 0 6.9-3C20 8.6 12 2 12 2z"/></svg></div></div>
+      </div>
+      <h1>Покер</h1>
+      <p>Техасский холдем с друзьями<br>или против ботов</p>
+    </div>
+    <div class="home-actions">
+      <button class="act primary" id="home-create">Создать стол для друзей</button>
+      <button class="act" id="home-bots">Играть с ботами</button>
+      <form class="join-row" id="home-join-form">
+        <input id="home-code" placeholder="Код стола" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+        <button class="act" type="submit">Войти</button>
+      </form>
+    </div>
+    <div class="conn" id="conn"></div>
+  </section>
+
+  <!-- ЛОББИ -->
+  <section class="screen" id="screen-lobby" hidden>
+    <header class="topbar">
+      <button class="icon-btn" id="lobby-back" aria-label="Назад">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
       </button>
-      <button class="icon-btn" id="btn-menu" aria-label="Menu">
+      <div class="topbar-title">Стол <b id="lobby-code">····</b></div>
+      <span class="icon-btn"></span>
+    </header>
+    <div class="lobby-hint" id="lobby-hint">Позови друзей — минимум 2 игрока</div>
+    <div class="lobby-list" id="lobby-list"></div>
+    <div class="lobby-actions">
+      <button class="act primary" id="lobby-invite">Пригласить друзей</button>
+      <div class="row2" id="lobby-host-row">
+        <button class="act" id="lobby-addbot">+ Бот</button>
+        <button class="act" id="lobby-removebot">− Бот</button>
+      </div>
+      <button class="act primary" id="lobby-start">Начать игру</button>
+      <div class="lobby-wait" id="lobby-wait">Ждём, когда хост начнёт игру</div>
+    </div>
+  </section>
+
+  <!-- СТОЛ -->
+  <div id="app" hidden>
+    <header id="topbar">
+      <button class="icon-btn" id="btn-back" aria-label="Назад">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-menu" aria-label="Меню">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
       </button>
     </header>
@@ -36,10 +87,11 @@
 
     <div class="spacer"></div>
 
+    <div id="timerbar"><i></i></div>
     <section id="actions">
       <button class="act" id="btn-call">Колл 10</button>
       <button class="act" id="btn-raise">Рейз 20</button>
-      <button class="act round" id="btn-more" aria-label="More">
+      <button class="act round" id="btn-more" aria-label="Ещё">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
       </button>
     </section>
@@ -51,13 +103,13 @@
       </div>
       <div id="me">
         <div id="me-rank">&nbsp;</div>
-        <img id="me-avatar" src="assets/jane.png" alt="" />
+        <img id="me-avatar" src="assets/m5.png" alt="" />
         <div id="me-stack">250</div>
       </div>
     </section>
   </div>
 
-  <!-- Raise / fold sheet -->
+  <!-- Рейз / фолд -->
   <div class="overlay" id="sheet-raise" hidden>
     <div class="sheet">
       <div class="sheet-title">Повысить до <span id="raise-val">20</span></div>
@@ -75,35 +127,40 @@
     </div>
   </div>
 
-  <!-- Menu sheet -->
+  <!-- Меню стола -->
   <div class="overlay" id="sheet-menu" hidden>
     <div class="sheet">
-      <button class="menu-item" id="menu-new">Новая игра</button>
+      <button class="menu-item" id="menu-invite">Пригласить друзей</button>
+      <button class="menu-item" id="menu-addbot">Добавить бота</button>
+      <button class="menu-item" id="menu-avatar">Сменить аватар</button>
       <button class="menu-item" id="menu-rules">Как играть</button>
+      <button class="menu-item danger" id="menu-leave">Покинуть стол</button>
       <button class="menu-item muted" id="menu-close">Закрыть</button>
     </div>
   </div>
 
-  <!-- Rules -->
+  <!-- Аватар -->
+  <div class="overlay" id="sheet-avatar" hidden>
+    <div class="sheet">
+      <div class="sheet-title">Выбери аватар</div>
+      <div class="avatar-grid" id="avatar-grid"></div>
+      <button class="menu-item muted" id="avatar-close">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Правила -->
   <div class="overlay" id="sheet-rules" hidden>
     <div class="sheet">
       <div class="sheet-title">Техасский холдем</div>
-      <p class="rules">Вы играете против четырёх ботов. Блайнды 5 / 10, у всех по 250 фишек на старте.<br><br>
-      <b>Колл</b> уравнивает текущую ставку, <b>Рейз</b> делает минимальное повышение. Кнопка <b>↑</b> открывает ползунок для большего рейза, олл-ина или фолда. Сбросить карты можно и свайпом вниз по своим картам.<br><br>
+      <p class="rules">За столом до пяти человек — друзья по ссылке или боты. Блайнды 5 / 10, на старте у всех по 250 фишек, проигравший стек получает новый.<br><br>
+      <b>Колл</b> уравнивает текущую ставку, <b>Рейз</b> делает минимальное повышение. Кнопка <b>↑</b> открывает ползунок для большего рейза, олл-ина или фолда. Сбросить карты можно и свайпом вниз по своим картам. На ход даётся 30 секунд.<br><br>
       Банк забирает лучшая комбинация из пяти карт, собранная из ваших двух и пяти общих.</p>
       <button class="act primary" id="rules-close">Понятно</button>
     </div>
   </div>
 
-  <!-- Game over -->
-  <div class="overlay center" id="sheet-over" hidden>
-    <div class="dialog">
-      <div id="over-title">Вы вылетели</div>
-      <div id="over-sub"></div>
-      <button class="act primary" id="over-new">Новая игра</button>
-    </div>
-  </div>
+  <div id="toast" hidden></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

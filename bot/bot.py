@@ -12,10 +12,18 @@ def call(method, **params):
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r)
 
-def reply(chat_id):
-    call("sendMessage", chat_id=chat_id,
-         text="Покер — техасский холдем против четырёх ботов.\nБлайнды 5/10, стек 250. Жми «Играть».",
-         reply_markup={"inline_keyboard": [[{"text": "Играть 🃏", "web_app": {"url": APP_URL}}]]})
+def reply(chat_id, room=None):
+    if room:
+        url = f"{APP_URL}?room={room}"
+        text = f"Тебя зовут за покерный стол {room}.\nЖми «Сесть за стол» — карты уже тасуются."
+        btn = "Сесть за стол 🃏"
+    else:
+        url = APP_URL
+        text = ("Покер — техасский холдем с друзьями или против ботов.\n"
+                "Создай стол, кинь ссылку друзьям (от 2 человек) или играй с ботами.\nБлайнды 5/10, стек 250.")
+        btn = "Играть 🃏"
+    call("sendMessage", chat_id=chat_id, text=text,
+         reply_markup={"inline_keyboard": [[{"text": btn, "web_app": {"url": url}}]]})
 
 def main():
     offset = 0
@@ -27,7 +35,9 @@ def main():
                 msg = upd.get("message") or {}
                 text = msg.get("text", "")
                 if msg.get("chat", {}).get("type") == "private" and text.startswith("/start"):
-                    reply(msg["chat"]["id"])
+                    parts = text.split(maxsplit=1)
+                    room = parts[1].strip().upper()[:8] if len(parts) > 1 and parts[1].strip().isalnum() else None
+                    reply(msg["chat"]["id"], room)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
             print("net error:", e, flush=True)
             time.sleep(3)
