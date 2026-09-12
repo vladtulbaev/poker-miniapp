@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Минимальный бот для @cashpoker_bot: на /start шлёт кнопку с Mini App. Без зависимостей."""
+"""Бот Кашпокер (@cashpoker_bot): на /start шлёт кнопку с Mini App. Без зависимостей."""
 import json, os, time, urllib.request, urllib.error
 
 TOKEN = os.environ["BOT_TOKEN"]
@@ -19,7 +19,7 @@ def reply(chat_id, room=None):
         btn = "Сесть за стол 🃏"
     else:
         url = APP_URL
-        text = ("Покер — техасский холдем с друзьями или против ботов.\n"
+        text = ("Кашпокер — техасский холдем с друзьями или против ботов.\n"
                 "Создай стол, кинь ссылку друзьям (от 2 человек) или играй с ботами.\nБлайнды 5/10, стек 250.")
         btn = "Играть 🃏"
     call("sendMessage", chat_id=chat_id, text=text,
