@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="color-scheme" content="dark" />
+  <title>Покер</title>
+  <link rel="icon" href="assets/jane.png" />
+  <link rel="apple-touch-icon" href="assets/jane.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <button class="icon-btn" id="btn-back" aria-label="Back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-menu" aria-label="Menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      </button>
+    </header>
+
+    <section id="seats"></section>
+
+    <div class="spacer"></div>
+
+    <section id="board-wrap">
+      <div id="board"></div>
+      <div id="pot-row">
+        <div id="status"></div>
+        <div id="pot">0</div>
+      </div>
+    </section>
+
+    <div class="spacer"></div>
+
+    <section id="actions">
+      <button class="act" id="btn-call">Колл 10</button>
+      <button class="act" id="btn-raise">Рейз 20</button>
+      <button class="act round" id="btn-more" aria-label="More">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+      </button>
+    </section>
+
+    <section id="bottom">
+      <div id="hand">
+        <div class="hole" id="hole0"></div>
+        <div class="hole" id="hole1"></div>
+      </div>
+      <div id="me">
+        <div id="me-rank">&nbsp;</div>
+        <img id="me-avatar" src="assets/jane.png" alt="" />
+        <div id="me-stack">250</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Raise / fold sheet -->
+  <div class="overlay" id="sheet-raise" hidden>
+    <div class="sheet">
+      <div class="sheet-title">Повысить до <span id="raise-val">20</span></div>
+      <input type="range" id="raise-range" min="20" max="250" step="5" value="20" />
+      <div class="chips">
+        <button class="chip" data-frac="0.5">½ банка</button>
+        <button class="chip" data-frac="0.75">¾ банка</button>
+        <button class="chip" data-frac="1">Банк</button>
+        <button class="chip" data-frac="max">Олл-ин</button>
+      </div>
+      <div class="sheet-actions">
+        <button class="act danger" id="btn-fold">Фолд</button>
+        <button class="act primary" id="btn-raise-confirm">Рейз 20</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu sheet -->
+  <div class="overlay" id="sheet-menu" hidden>
+    <div class="sheet">
+      <button class="menu-item" id="menu-new">Новая игра</button>
+      <button class="menu-item" id="menu-rules">Как играть</button>
+      <button class="menu-item muted" id="menu-close">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Rules -->
+  <div class="overlay" id="sheet-rules" hidden>
+    <div class="sheet">
+      <div class="sheet-title">Техасский холдем</div>
+      <p class="rules">Вы играете против четырёх ботов. Блайнды 5 / 10, у всех по 250 фишек на старте.<br><br>
+      <b>Колл</b> уравнивает текущую ставку, <b>Рейз</b> делает минимальное повышение. Кнопка <b>↑</b> открывает ползунок для большего рейза, олл-ина или фолда. Сбросить карты можно и свайпом вниз по своим картам.<br><br>
+      Банк забирает лучшая комбинация из пяти карт, собранная из ваших двух и пяти общих.</p>
+      <button class="act primary" id="rules-close">Понятно</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div class="overlay center" id="sheet-over" hidden>
+    <div class="dialog">
+      <div id="over-title">Вы вылетели</div>
+      <div id="over-sub"></div>
+      <button class="act primary" id="over-new">Новая игра</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
