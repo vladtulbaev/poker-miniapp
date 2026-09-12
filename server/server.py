@@ -25,6 +25,9 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ALLOW_DEV = os.environ.get("ALLOW_DEV", "0") == "1"
 PORT = int(os.environ.get("PORT", "8765"))
 USERS_FILE = os.environ.get("USERS_FILE", "users.json")
+APP_URL = os.environ.get("APP_URL", "https://vladtulbaev.github.io/poker-miniapp/")
+APP_SHORT_NAME = os.environ.get("APP_SHORT_NAME", "")  # короткое имя Mini App из BotFather (/newapp) — тогда ссылка из группы открывает игру в один тап
+BOT_POLL = os.environ.get("BOT_POLL", "1") == "1"
 
 SB, BB, START = 5, 10, 250
 MAX_SEATS = 5
@@ -32,6 +35,7 @@ ACT_TIMEOUT = 30          # секунд на ход человеку
 OFFLINE_TIMEOUT = 6       # секунд на ход, если человек офлайн
 KICK_OFFLINE_AFTER = 120  # секунд офлайна, после которых убираем со стола между раздачами
 ROOM_TTL = 600            # пустая комната живёт 10 минут
+GROUP_ROOM_TTL = 6 * 3600 # стол, привязанный к группе, живёт дольше
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("poker")
@@ -243,6 +247,11 @@ class Room:
         self.action_future = None
         self.empty_since = time.time()
         self.hand_no = 0
+        self.chat_id = None       # группа, к которой привязан стол
+        self.chat_title = ""
+        self.msg_id = None        # сообщение бота со столом в группе
+        self.last_group_text = ""
+        self.group_task = None
 
     # ---------- состав ----------
     def humans(self):
@@ -320,6 +329,8 @@ class Room:
         }
 
     def broadcast(self):
+        if self.chat_id:
+            schedule_group_update(self)
         for p in self.players:
             if p.bot or not p.sockets:
                 continue
@@ -733,10 +744,30 @@ def new_code():
 
 
 def get_room(code):
-    r = ROOMS.get((code or "").upper().strip())
+    code = (code or "").upper().strip()
+    if code.startswith("G") and code[1:].lstrip("-").isdigit() and len(code) > 5:
+        return ensure_group_room(int(code[1:]), "")  # g<chat_id> — стол, привязанный к группе
+    r = ROOMS.get(code)
     if r and r.phase == "closed":
         return None
     return r
+
+
+CHAT_ROOM = {}
+
+
+def ensure_group_room(chat_id, title):
+    code = CHAT_ROOM.get(chat_id)
+    room = ROOMS.get(code) if code else None
+    if room is None or room.phase == "closed":
+        room = Room(new_code(), None)
+        room.chat_id = chat_id
+        room.chat_title = title or ""
+        ROOMS[room.code] = room
+        CHAT_ROOM[chat_id] = room.code
+    elif title:
+        room.chat_title = title
+    return room
 
 
 class Conn:
@@ -932,13 +963,171 @@ async def janitor():
         await asyncio.sleep(30)
         now = time.time()
         for code, room in list(ROOMS.items()):
-            if room.phase == "closed" or (not room.humans() and room.empty_since and now - room.empty_since > ROOM_TTL):
+            ttl = GROUP_ROOM_TTL if room.chat_id else ROOM_TTL
+            if room.phase == "closed" or (not room.humans() and room.empty_since and now - room.empty_since > ttl):
                 if room.task and not room.task.done():
                     room.task.cancel()
                 for p in room.players:
                     USER_ROOM.pop(p.id, None)
                 ROOMS.pop(code, None)
+                if room.chat_id and CHAT_ROOM.get(room.chat_id) == code:
+                    CHAT_ROOM.pop(room.chat_id, None)
                 log.info("room %s removed", code)
+
+
+# ---------------------------------------------------------------- Telegram-бот (внутри сервера)
+import urllib.request
+import urllib.error
+
+BOT_USERNAME = ""
+
+
+def _tg_sync(method, **params):
+    data = json.dumps(params).encode()
+    req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/{method}", data=data,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+
+async def tg(method, **params):
+    try:
+        return await asyncio.to_thread(_tg_sync, method, **params)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:200]
+        log.warning("tg %s failed: %s %s", method, e.code, body)
+    except Exception as e:
+        log.warning("tg %s failed: %s", method, e)
+    return None
+
+
+def room_link(room):
+    """Ссылка на стол для кнопки в группе."""
+    param = f"g{room.chat_id}" if room.chat_id else room.code
+    if APP_SHORT_NAME:
+        return f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}?startapp={param}"
+    return f"https://t.me/{BOT_USERNAME}?start={param}"
+
+
+def group_text(room):
+    humans = [p for p in room.players if not p.left]
+    names = ", ".join(p.name + (" 🤖" if p.bot else "") for p in humans) or "пока никого"
+    if room.phase == "playing":
+        state = f"Идёт игра, раздача №{room.hand_no}. Можно подсесть — попадёшь в следующую раздачу."
+    else:
+        state = "Ждём игроков. Нужно минимум 2 человека, стол до 5 мест."
+    return (f"🃏 Кашпокер — стол {room.code}\n\n"
+            f"За столом ({len(humans)}/5): {names}\n{state}\n\n"
+            f"Жми кнопку, чтобы сесть. Код для входа вручную: {room.code}")
+
+
+def group_markup(room):
+    return {"inline_keyboard": [[{"text": "Сесть за стол 🃏", "url": room_link(room)}]]}
+
+
+async def post_group_message(room):
+    res = await tg("sendMessage", chat_id=room.chat_id, text=group_text(room), reply_markup=group_markup(room))
+    if res and res.get("ok"):
+        room.msg_id = res["result"]["message_id"]
+        room.last_group_text = group_text(room)
+
+
+def schedule_group_update(room):
+    if room.group_task and not room.group_task.done():
+        return
+    room.group_task = _spawn(_group_update(room))
+
+
+async def _group_update(room):
+    await asyncio.sleep(2.0)
+    if not room.chat_id or not room.msg_id:
+        return
+    text = group_text(room)
+    if text == room.last_group_text:
+        return
+    room.last_group_text = text
+    await tg("editMessageText", chat_id=room.chat_id, message_id=room.msg_id, text=text, reply_markup=group_markup(room))
+
+
+def web_app_markup(room):
+    url = f"{APP_URL}?room={room.code}" if room else APP_URL
+    return {"inline_keyboard": [[{"text": "Сесть за стол 🃏" if room else "Играть 🃏", "web_app": {"url": url}}]]}
+
+
+async def handle_update(upd):
+    msg = upd.get("message")
+    if msg:
+        chat = msg.get("chat", {})
+        ctype = chat.get("type")
+        text = (msg.get("text") or "").strip()
+        cmd = text.split()[0].lower().split("@")[0] if text.startswith("/") else ""
+        if ctype == "private":
+            if cmd == "/start":
+                parts = text.split(maxsplit=1)
+                param = parts[1].strip() if len(parts) > 1 else ""
+                room = get_room(param) if param else None
+                if room:
+                    who = f" в чате «{room.chat_title}»" if room.chat_title else ""
+                    await tg("sendMessage", chat_id=chat["id"],
+                             text=f"Тебя зовут за стол {room.code}{who}.\nЖми «Сесть за стол» — карты уже тасуются.",
+                             reply_markup=web_app_markup(room))
+                else:
+                    await tg("sendMessage", chat_id=chat["id"],
+                             text=("Кашпокер — техасский холдем с друзьями или против ботов.\n"
+                                   "Создай стол и кинь ссылку друзьям, или добавь меня в группу — "
+                                   "я соберу стол прямо там.\nБлайнды 5/10, стек 250."),
+                             reply_markup=web_app_markup(None))
+            return
+        if ctype in ("group", "supergroup"):
+            new_members = msg.get("new_chat_members") or []
+            if any(m.get("username") == BOT_USERNAME for m in new_members):
+                await group_table(chat, greet=True)
+                return
+            if cmd in ("/poker", "/start", "/table", "/stol", "/game"):
+                await group_table(chat)
+            return
+    cm = upd.get("my_chat_member")
+    if cm:
+        chat = cm.get("chat", {})
+        new = cm.get("new_chat_member", {})
+        if chat.get("type") in ("group", "supergroup") and new.get("user", {}).get("username") == BOT_USERNAME \
+                and new.get("status") in ("member", "administrator"):
+            await group_table(chat, greet=True)
+
+
+async def group_table(chat, greet=False):
+    room = ensure_group_room(chat["id"], chat.get("title", ""))
+    if greet:
+        await tg("sendMessage", chat_id=chat["id"],
+                 text="Привет! Я Кашпокер — покер прямо в этом чате. Ниже стол для вас: жмите кнопку и садитесь. "
+                      "Новый стол — команда /poker.")
+    await post_group_message(room)
+
+
+async def bot_loop():
+    global BOT_USERNAME
+    me = await tg("getMe")
+    if not me or not me.get("ok"):
+        log.warning("bot: getMe failed, polling disabled")
+        return
+    BOT_USERNAME = me["result"]["username"]
+    log.info("bot @%s polling", BOT_USERNAME)
+    await tg("setMyCommands", commands=[{"command": "poker", "description": "Собрать стол в этом чате"}],
+             scope={"type": "all_group_chats"})
+    await tg("setMyCommands", commands=[{"command": "start", "description": "Открыть Кашпокер"}],
+             scope={"type": "all_private_chats"})
+    offset = 0
+    while True:
+        res = await tg("getUpdates", offset=offset, timeout=50, allowed_updates=["message", "my_chat_member"])
+        if not res or not res.get("ok"):
+            await asyncio.sleep(3)
+            continue
+        for upd in res.get("result", []):
+            offset = upd["update_id"] + 1
+            try:
+                await handle_update(upd)
+            except Exception:
+                log.exception("bot update failed")
 
 
 async def main():
@@ -946,6 +1135,8 @@ async def main():
         log.warning("BOT_TOKEN не задан — проверка initData отключена, только dev-режим")
     async with serve(handle, "127.0.0.1", PORT, ping_interval=20, ping_timeout=20, max_size=64 * 1024):
         log.info("poker ws on 127.0.0.1:%s (dev=%s)", PORT, ALLOW_DEV)
+        if BOT_TOKEN and BOT_POLL:
+            _spawn(bot_loop())
         await janitor()
 
 
