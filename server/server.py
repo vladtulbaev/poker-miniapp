@@ -252,6 +252,7 @@ class Room:
         self.msg_id = None        # сообщение бота со столом в группе
         self.last_group_text = ""
         self.group_task = None
+        self.last_post_ts = 0
 
     # ---------- состав ----------
     def humans(self):
@@ -1079,10 +1080,6 @@ async def handle_update(upd):
                              reply_markup=web_app_markup(None))
             return
         if ctype in ("group", "supergroup"):
-            new_members = msg.get("new_chat_members") or []
-            if any(m.get("username") == BOT_USERNAME for m in new_members):
-                await group_table(chat, greet=True)
-                return
             if cmd in ("/poker", "/start", "/table", "/stol", "/game"):
                 await group_table(chat)
             return
@@ -1097,6 +1094,13 @@ async def handle_update(upd):
 
 async def group_table(chat, greet=False):
     room = ensure_group_room(chat["id"], chat.get("title", ""))
+    now = time.time()
+    if now - room.last_post_ts < 5:
+        return  # два события об одном добавлении / двойной тап по команде
+    room.last_post_ts = now
+    if room.msg_id:
+        await tg("deleteMessage", chat_id=room.chat_id, message_id=room.msg_id)
+        room.msg_id = None
     if greet:
         await tg("sendMessage", chat_id=chat["id"],
                  text="Привет! Я Кашпокер — покер прямо в этом чате. Ниже стол для вас: жмите кнопку и садитесь. "
